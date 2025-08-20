@@ -132,6 +132,7 @@ export const candidateOnboardFormControls = [
 
 export const initialCandidateFormData = {
   resume: "",
+  resumeOriginalName: "",
   name: "",
   email: "",
   phoneNumber: "",

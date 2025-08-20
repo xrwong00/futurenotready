@@ -11,12 +11,6 @@ import {
 } from "@/utils";
 import { useUser } from "@clerk/nextjs";
 import { createProfileAction } from "@/actions";
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseClient = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "https://ymsijpnegskkoiuerthi.supabase.co",
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inltc2lqcG5lZ3Nra29pdWVydGhpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTQyMzYzNDYsImV4cCI6MjAyOTgxMjM0Nn0.PM7Nr9qTZFEJsf62eHgkFXKGPqt0gfMdFN6SOJjCP6M"
-);
 
 function OnBoard() {
   const [currentTab, setCurrentTab] = useState("candidate");
@@ -33,22 +27,38 @@ function OnBoard() {
 
   function handleFileChange(event) {
     event.preventDefault();
-    setFile(event.target.files[0]);
+    const picked = event.target.files?.[0];
+    if (!picked) return;
+    setFile(picked);
+    // Immediately reflect chosen filename in UI
+    setCandidateFormData((prev) => ({
+      ...prev,
+      resumeOriginalName: picked.name,
+    }));
   }
 
   async function handleUploadPdfToSupabase() {
-    const { data, error } = await supabaseClient.storage
-      .from(process.env.NEXT_PUBLIC_SUPABASE_BUCKET || "job-board-public")
-      .upload(`/public/${file.name}`, file, {
-        cacheControl: "3600",
-        upsert: false,
+    if (!file) return;
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("userId", user?.id || "anonymous");
+
+      const res = await fetch("/api/upload-resume", {
+        method: "POST",
+        body: form,
       });
-    console.log(data, error);
-    if (data) {
-      setCandidateFormData({
-        ...candidateFormData,
-        resume: data.path,
-      });
+      const json = await res.json();
+      if (!res.ok) {
+        console.error("Upload failed:", json?.error || res.statusText);
+        return;
+      }
+      setCandidateFormData((prev) => ({
+        ...prev,
+        resume: json.publicUrl || json.path || prev.resume,
+      }));
+    } catch (err) {
+      console.error("Error uploading resume:", err);
     }
   }
 
