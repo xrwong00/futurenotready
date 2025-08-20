@@ -1,8 +1,3 @@
 {
-  "framework": "nextjs",
-  "functions": {
-    "api/pdf-text/**": {
-      "runtime": "dockerfile"
-    }
-  }
+  "framework": "nextjs"
 }
