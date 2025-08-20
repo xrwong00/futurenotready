@@ -13,6 +13,29 @@ function getSupabaseServerClient() {
   return createClient(url, key);
 }
 
+async function tryPopplerService(pdfBuffer, origin) {
+  try {
+    if (!origin) return null;
+    const base = process.env.PDF_TEXT_URL || origin; // allow override to external URL
+    const health = await fetch(new URL('/api/pdf-text/health', base), { cache: 'no-store' });
+    if (!health.ok) return null;
+    const res = await fetch(new URL('/api/pdf-text/extract', base), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/pdf' },
+      body: pdfBuffer,
+    });
+    if (!res.ok) {
+      return null;
+    }
+    const data = await res.json();
+    const text = (data?.text || '').trim();
+    if (text.length > 0) return text;
+  } catch (e) {
+    // ignore and fallback
+  }
+  return null;
+}
+
 async function extractPdfText(pdfBuffer) {
   console.log(`🔍 Starting PDF text extraction from ${pdfBuffer.length} byte buffer`);
   
@@ -370,8 +393,14 @@ export async function POST(req) {
     let pdfParseSuccess = false;
     
     try {
-      console.log('🔍 Starting PDF text extraction...');
-      extractedText = await extractPdfText(pdfBuffer);
+  console.log('🔍 Trying Docker-based Poppler service first...');
+  let origin;
+  try { origin = process.env.PDF_TEXT_URL || new URL(req.url).origin; } catch {}
+  extractedText = await tryPopplerService(pdfBuffer, origin);
+      if (!extractedText) {
+        console.log('↩️ Poppler service unavailable or failed; falling back to in-function methods...');
+        extractedText = await extractPdfText(pdfBuffer);
+      }
       pdfParseSuccess = !!extractedText && extractedText.trim().length > 0;
       console.log(`✅ PDF extraction result: ${extractedText.length} characters`);
       
